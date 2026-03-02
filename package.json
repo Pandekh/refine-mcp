@@ -23,6 +23,11 @@
       "prettier --write"
     ]
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@openai/codex-sdk": "^0.106.0",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.0.18",
