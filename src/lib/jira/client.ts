@@ -52,7 +52,7 @@ async function jiraFetch(path: string, options?: RequestInit) {
     return null;
   }
 
-  return JSON.parse(text);
+  return JSON.parse(text) as unknown;
 }
 
 import { adfToMarkdown } from "./adf-to-markdown";
@@ -67,7 +67,7 @@ function mapIssue(raw: Record<string, unknown>): JiraTicket {
       const active = customSprint.find(
         (s) => (s as unknown as { state: string }).state === "active"
       );
-      const s = active || customSprint[customSprint.length - 1];
+      const s = active ?? customSprint[customSprint.length - 1];
 
       return { name: s.name, id: s.id };
     }
@@ -93,7 +93,7 @@ function mapIssue(raw: Record<string, unknown>): JiraTicket {
   const links = ((fields.issuelinks as Array<Record<string, unknown>>) || []).map((link) => {
     const outward = link.outwardIssue as Record<string, unknown> | undefined;
     const inward = link.inwardIssue as Record<string, unknown> | undefined;
-    const related = outward || inward;
+    const related = outward ?? inward;
     const linkType = link.type as { outward: string; inward: string };
 
     return {
@@ -128,15 +128,15 @@ function mapIssue(raw: Record<string, unknown>): JiraTicket {
 }
 
 export async function getTicket(ticketId: string): Promise<JiraTicket> {
-  const raw = await jiraFetch(
+  const raw = (await jiraFetch(
     `/issue/${ticketId}?expand=names&fields=summary,description,issuetype,priority,status,assignee,reporter,labels,components,issuelinks,created,updated,project,customfield_10020,customfield_10014,customfield_10028,story_points`
-  );
+  )) as Record<string, unknown>;
 
   return mapIssue(raw);
 }
 
 export async function searchTickets(jql: string, maxResults = 20): Promise<JiraTicket[]> {
-  const data = await jiraFetch(`/search/jql`, {
+  const data = (await jiraFetch(`/search/jql`, {
     method: "POST",
     body: JSON.stringify({
       jql,
@@ -160,9 +160,9 @@ export async function searchTickets(jql: string, maxResults = 20): Promise<JiraT
         "customfield_10028",
       ],
     }),
-  });
+  })) as { issues: Record<string, unknown>[] };
 
-  return ((data.issues as Record<string, unknown>[]) || []).map(mapIssue);
+  return (data.issues ?? []).map(mapIssue);
 }
 
 import { markdownToAdf } from "./markdown-to-adf";
@@ -244,12 +244,12 @@ export async function createTicket(opts: {
     fields["customfield_10028"] = opts.storyPoints;
   }
 
-  const data = await jiraFetch("/issue", {
+  const data = (await jiraFetch("/issue", {
     method: "POST",
     body: JSON.stringify({ fields }),
-  });
+  })) as { key: string; id: string };
 
-  return { key: data.key as string, id: data.id as string };
+  return { key: data.key, id: data.id };
 }
 
 // ── Metadata endpoints ──────────────────────────────────────────
@@ -261,9 +261,13 @@ export interface JiraProject {
 }
 
 export async function listProjects(): Promise<JiraProject[]> {
-  const data = await jiraFetch("/project?recent=50&orderBy=name");
+  const data = (await jiraFetch("/project?recent=50&orderBy=name")) as Array<{
+    id: string;
+    key: string;
+    name: string;
+  }>;
 
-  return (data as Array<{ id: string; key: string; name: string }>).map((p) => ({
+  return data.map((p) => ({
     id: p.id,
     key: p.key,
     name: p.name,
@@ -277,9 +281,13 @@ export interface JiraIssueType {
 }
 
 export async function listIssueTypes(projectKey: string): Promise<JiraIssueType[]> {
-  const data = await jiraFetch(`/project/${projectKey}/statuses`);
+  const data = (await jiraFetch(`/project/${projectKey}/statuses`)) as Array<{
+    id: string;
+    name: string;
+    subtask: boolean;
+  }>;
 
-  return (data as Array<{ id: string; name: string; subtask: boolean }>).map((t) => ({
+  return data.map((t) => ({
     id: t.id,
     name: t.name,
     subtask: t.subtask,
@@ -292,11 +300,9 @@ export interface JiraPriority {
 }
 
 export async function listPriorities(): Promise<JiraPriority[]> {
-  const data = await jiraFetch("/priority");
+  const data = (await jiraFetch("/priority")) as Array<{ id: string; name: string }>;
 
-  return (data as Array<{ id: string; name: string }>)
-    .filter((p) => p.name !== "empty")
-    .map((p) => ({ id: p.id, name: p.name }));
+  return data.filter((p) => p.name !== "empty").map((p) => ({ id: p.id, name: p.name }));
 }
 
 export interface JiraComponent {
@@ -305,9 +311,12 @@ export interface JiraComponent {
 }
 
 export async function listComponents(projectKey: string): Promise<JiraComponent[]> {
-  const data = await jiraFetch(`/project/${projectKey}/components`);
+  const data = (await jiraFetch(`/project/${projectKey}/components`)) as Array<{
+    id: string;
+    name: string;
+  }>;
 
-  return (data as Array<{ id: string; name: string }>).map((c) => ({
+  return data.map((c) => ({
     id: c.id,
     name: c.name,
   }));
@@ -320,24 +329,19 @@ export interface JiraEpic {
 }
 
 export async function listEpics(projectKey: string): Promise<JiraEpic[]> {
-  const data = await jiraFetch("/search/jql", {
+  const data = (await jiraFetch("/search/jql", {
     method: "POST",
     body: JSON.stringify({
       jql: `project=${projectKey} AND issuetype=Epic AND status != Done ORDER BY updated DESC`,
       maxResults: 50,
       fields: ["summary", "status"],
     }),
-  });
+  })) as { issues: Array<{ key: string; fields: { summary: string; status: { name: string } } }> };
 
-  return ((data as { issues: Array<Record<string, unknown>> }).issues || []).map((i) => ({
-    key: i.key as string,
-    summary: ((i.fields as Record<string, unknown>).summary as string) || "",
-    status:
-      (
-        (i.fields as Record<string, unknown>).status as {
-          name: string;
-        }
-      )?.name || "",
+  return (data.issues ?? []).map((i) => ({
+    key: i.key,
+    summary: i.fields.summary || "",
+    status: i.fields.status?.name || "",
   }));
 }
 

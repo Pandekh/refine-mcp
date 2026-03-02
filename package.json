@@ -1,7 +1,9 @@
 {
   "name": "refine-mcp",
   "version": "0.1.0",
-  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "refine-mcp": "./bin/refine-mcp.js"
   },
