@@ -1,0 +1,9 @@
+#\!/bin/sh
+echo "▶ typecheck..."
+npm run typecheck
+
+echo "▶ lint..."
+npm run lint
+
+echo "▶ tests..."
+npm run test

@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+bin/
+*.map
+
+# Test coverage
+coverage/
+
+# Lock files (keep package-lock.json, ignore yarn.lock)
+yarn.lock
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo

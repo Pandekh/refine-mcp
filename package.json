@@ -1,0 +1,37 @@
+{
+  "name": "refine-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "refine-mcp": "./bin/refine-mcp.js"
+  },
+  "scripts": {
+    "build": "../node_modules/.bin/esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --tsconfig=tsconfig.json --outfile=dist/server.mjs",
+    "typecheck": "../node_modules/.bin/tsc --noEmit",
+    "lint": "../node_modules/.bin/eslint src",
+    "lint:fix": "../node_modules/.bin/eslint src --fix",
+    "format": "node_modules/.bin/prettier --write \"src/**/*.ts\"",
+    "format:check": "node_modules/.bin/prettier --check \"src/**/*.ts\"",
+    "test": "node_modules/.bin/vitest run",
+    "test:watch": "node_modules/.bin/vitest",
+    "test:coverage": "node_modules/.bin/vitest run --coverage"
+  },
+  "lint-staged": {
+    "refine-mcp/src/**/*.ts": [
+      "../node_modules/.bin/eslint --fix",
+      "node_modules/.bin/prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-sonarjs": "^4.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.1",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  }
+}
