@@ -31,15 +31,24 @@ function newSessionId(): string {
 }
 
 function repoName(url: string): string {
-  return url.split("/").pop()?.replace(/\.git$/, "") ?? url;
+  return (
+    url
+      .split("/")
+      .pop()
+      ?.replace(/\.git$/, "") ?? url
+  );
 }
 
 function uniqueName(base: string, used: Set<string>): string {
-  if (!used.has(base)) return base;
+  if (!used.has(base)) {
+    return base;
+  }
 
   let i = 2;
 
-  while (used.has(`${base}_${i}`)) i++;
+  while (used.has(`${base}_${i}`)) {
+    i++;
+  }
 
   return `${base}_${i}`;
 }
@@ -89,7 +98,9 @@ export function getSession(id: string): Session | null {
   const sessionDir = path.join(SESSIONS_DIR, id);
   const metaPath = path.join(sessionDir, "meta.json");
 
-  if (!existsSync(metaPath)) return null;
+  if (!existsSync(metaPath)) {
+    return null;
+  }
 
   try {
     const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as SessionMeta;
@@ -104,7 +115,9 @@ export function getSession(id: string): Session | null {
 export function touchSession(id: string): void {
   const metaPath = path.join(SESSIONS_DIR, id, "meta.json");
 
-  if (!existsSync(metaPath)) return;
+  if (!existsSync(metaPath)) {
+    return;
+  }
 
   try {
     const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as SessionMeta;
@@ -118,7 +131,9 @@ export function touchSession(id: string): void {
 
 /** List all sessions, most recently accessed first. */
 export function listSessions(): Session[] {
-  if (!existsSync(SESSIONS_DIR)) return [];
+  if (!existsSync(SESSIONS_DIR)) {
+    return [];
+  }
 
   const sessions: Session[] = [];
 
@@ -126,7 +141,9 @@ export function listSessions(): Session[] {
     for (const entry of readdirSync(SESSIONS_DIR)) {
       const session = getSession(entry);
 
-      if (session) sessions.push(session);
+      if (session) {
+        sessions.push(session);
+      }
     }
   } catch {
     // ignore
@@ -143,7 +160,9 @@ export function listSessions(): Session[] {
 export function dropSession(id: string): boolean {
   const sessionDir = path.join(SESSIONS_DIR, id);
 
-  if (!existsSync(sessionDir)) return false;
+  if (!existsSync(sessionDir)) {
+    return false;
+  }
 
   rmSync(sessionDir, { recursive: true, force: true });
 

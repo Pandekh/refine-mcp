@@ -105,15 +105,16 @@ async function resolveQuery(
 ): Promise<{ query: string; results: RepoResult[] }> {
   // Direct URL — return as-is without searching
   if (query.startsWith("http") || query.startsWith("git@")) {
-    const name = query.split("/").pop()?.replace(/\.git$/, "") ?? query;
+    const name =
+      query
+        .split("/")
+        .pop()
+        ?.replace(/\.git$/, "") ?? query;
 
     return { query, results: [{ provider: "url", name, path: name, url: query }] };
   }
 
-  const results = [
-    ...(await searchGitLab(query, signal)),
-    ...(await searchGitHub(query, signal)),
-  ];
+  const results = [...(await searchGitLab(query, signal)), ...(await searchGitHub(query, signal))];
 
   return { query, results };
 }
@@ -345,9 +346,7 @@ export function registerGitTools(server: McpServer): void {
         content: [
           {
             type: "text",
-            text: removed
-              ? `Session ${session_id} removed.`
-              : `Session "${session_id}" not found.`,
+            text: removed ? `Session ${session_id} removed.` : `Session "${session_id}" not found.`,
           },
         ],
       };

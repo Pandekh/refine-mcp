@@ -3,13 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import os from "os";
 
-import {
-  repoNamesForUrls,
-  getSession,
-  listSessions,
-  dropSession,
-  touchSession,
-} from "../session";
+import { repoNamesForUrls, getSession, listSessions, dropSession, touchSession } from "../session";
 
 // ── repoNamesForUrls ──────────────────────────────────────────────────────────
 
@@ -19,9 +13,7 @@ describe("repoNamesForUrls", () => {
   });
 
   it("strips .git suffix", () => {
-    expect(repoNamesForUrls(["https://github.com/org/auth-service.git"])).toEqual([
-      "auth-service",
-    ]);
+    expect(repoNamesForUrls(["https://github.com/org/auth-service.git"])).toEqual(["auth-service"]);
   });
 
   it("deduplicates same-name repos with suffix", () => {
@@ -35,10 +27,7 @@ describe("repoNamesForUrls", () => {
   });
 
   it("handles multiple different repos", () => {
-    const urls = [
-      "https://github.com/org/auth-service",
-      "https://github.com/org/payment-service",
-    ];
+    const urls = ["https://github.com/org/auth-service", "https://github.com/org/payment-service"];
 
     expect(repoNamesForUrls(urls)).toEqual(["auth-service", "payment-service"]);
   });
@@ -117,9 +106,7 @@ describe("listSessions", () => {
   });
 
   it("sorts by lastAccessedAt descending", () => {
-    const sessions = listSessions().filter((s) =>
-      ["sess_list_a", "sess_list_b"].includes(s.id)
-    );
+    const sessions = listSessions().filter((s) => ["sess_list_a", "sess_list_b"].includes(s.id));
 
     expect(sessions[0].id).toBe("sess_list_b");
     expect(sessions[1].id).toBe("sess_list_a");
