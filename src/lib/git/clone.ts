@@ -136,6 +136,7 @@ export async function ensureCloned(repoUrl: string): Promise<string> {
         stdio: "pipe",
         timeout: 10_000,
       });
+
       return repoPath;
     } catch {
       // fallback: re-clone from scratch
