@@ -1,11 +1,10 @@
 import { execFileSync } from "child_process";
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, utimesSync } from "fs";
+import { existsSync, mkdirSync, rmSync } from "fs";
 import { createHash } from "crypto";
 import path from "path";
 import os from "os";
 
 const REPOS_DIR = path.join(os.tmpdir(), "refine-repos");
-const MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 function repoHash(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 16);
@@ -114,22 +113,35 @@ export function verifyRepo(repoUrl: string): void {
   }
 }
 
-/** Ensure a repo is cloned locally. Returns the path to the repo. */
+/** Ensure a repo is cloned locally and up-to-date. Returns the path to the repo. */
 export async function ensureCloned(repoUrl: string): Promise<string> {
   mkdirSync(REPOS_DIR, { recursive: true });
 
   const hash = repoHash(canonicalUrl(repoUrl));
   const repoPath = path.join(REPOS_DIR, hash);
+  const authedUrl = requireAuthedUrl(repoUrl);
 
   if (existsSync(path.join(repoPath, ".git"))) {
-    const now = new Date();
-
-    utimesSync(repoPath, now, now);
-
-    return repoPath;
+    try {
+      // Refresh token in case it rotated
+      execFileSync("git", ["-C", repoPath, "remote", "set-url", "origin", authedUrl], {
+        stdio: "pipe",
+        timeout: 10_000,
+      });
+      execFileSync("git", ["-C", repoPath, "fetch", "--depth", "1", "origin"], {
+        stdio: "pipe",
+        timeout: 60_000,
+      });
+      execFileSync("git", ["-C", repoPath, "merge", "--ff-only", "FETCH_HEAD"], {
+        stdio: "pipe",
+        timeout: 10_000,
+      });
+      return repoPath;
+    } catch {
+      // fallback: re-clone from scratch
+      rmSync(repoPath, { recursive: true, force: true });
+    }
   }
-
-  const authedUrl = requireAuthedUrl(repoUrl);
 
   execFileSync("git", ["clone", "--depth", "1", "--single-branch", authedUrl, repoPath], {
     stdio: "pipe",
@@ -137,31 +149,6 @@ export async function ensureCloned(repoUrl: string): Promise<string> {
   });
 
   return repoPath;
-}
-
-/** Remove cached repos older than MAX_AGE_MS */
-export function cleanupOldRepos(): void {
-  if (!existsSync(REPOS_DIR)) {
-    return;
-  }
-
-  const now = Date.now();
-
-  try {
-    for (const entry of readdirSync(REPOS_DIR)) {
-      const fullPath = path.join(REPOS_DIR, entry);
-
-      try {
-        if (now - statSync(fullPath).mtimeMs > MAX_AGE_MS) {
-          rmSync(fullPath, { recursive: true, force: true });
-        }
-      } catch {
-        // ignore stat/rm errors for individual entries
-      }
-    }
-  } catch {
-    // ignore if REPOS_DIR becomes unreadable
-  }
 }
 
 /** Remove a specific cloned repo */

@@ -3,7 +3,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { ensureCloned, cleanupOldRepos, verifyRepo } from "@/lib/git/clone";
+import { ensureCloned, verifyRepo } from "@/lib/git/clone";
 
 const log = (...args: unknown[]) =>
   process.stderr.write(`[refine] ${args.map(String).join(" ")}\n`);
@@ -177,7 +177,6 @@ export function registerGitTools(server: McpServer): void {
     async ({ url, question }, { signal }) => {
       log("explore_repo", url);
       log("explore_repo question:", question);
-      cleanupOldRepos();
       signal?.throwIfAborted();
 
       log("explore_repo verifying access...");
