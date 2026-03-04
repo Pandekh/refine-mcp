@@ -291,7 +291,9 @@ export function registerGitTools(server: McpServer): void {
 
               const turn = await thread.run(`Repository: ${name}\n\n${question}`);
 
-              log(`explore_session agent done for ${name}, length: ${turn.finalResponse?.length ?? 0}`);
+              log(
+                `explore_session agent done for ${name}, length: ${turn.finalResponse?.length ?? 0}`
+              );
 
               return `## ${name}\n\n${turn.finalResponse?.trim() ?? "No relevant code found."}`;
             })

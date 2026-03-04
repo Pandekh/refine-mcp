@@ -31,7 +31,9 @@ export function createJob(sessionId: string): Job {
 export function resolveJob(id: string, result: string): void {
   const job = jobs.get(id);
 
-  if (!job) return;
+  if (!job) {
+    return;
+  }
 
   job.status = "done";
   job.completedAt = new Date().toISOString();
@@ -41,7 +43,9 @@ export function resolveJob(id: string, result: string): void {
 export function rejectJob(id: string, error: string): void {
   const job = jobs.get(id);
 
-  if (!job) return;
+  if (!job) {
+    return;
+  }
 
   job.status = "error";
   job.completedAt = new Date().toISOString();
