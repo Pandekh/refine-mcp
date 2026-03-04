@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { ensureCloned, verifyRepo } from "@/lib/git/clone";
+import { createJob, getJob, rejectJob, resolveJob } from "@/lib/git/jobs";
 import {
   createSession,
   dropSession,
@@ -223,7 +224,7 @@ export function registerGitTools(server: McpServer): void {
     "explore_session",
     {
       description:
-        "Explore all repos in a session with a single Codex agent. The agent navigates the session directory where all repos are available as subdirectories — it can search, compare, and reason across all of them simultaneously.\n\nRefreshes all repos (git pull) before starting.\n\nReturns Technical Context — use as `context` in enrich_ticket.\n\n⛔ Only use session_id from create_session or list_sessions.",
+        "Start an async exploration of all repos in a session. Launches one Codex agent per repo in parallel — returns immediately with a job_id.\n\nCall get_exploration_result(job_id) to poll for the result. Poll every few seconds until status is 'done' or 'error'.\n\nRefreshes all repos (git pull) before starting.\n\n⛔ Only use session_id from create_session or list_sessions.",
       inputSchema: {
         session_id: z.string().describe("Session ID from create_session or list_sessions"),
         question: z
@@ -235,7 +236,6 @@ export function registerGitTools(server: McpServer): void {
     },
     async ({ session_id, question }, { signal }) => {
       log("explore_session", session_id);
-      log("explore_session question:", question);
 
       const session = getSession(session_id);
 
@@ -254,46 +254,114 @@ export function registerGitTools(server: McpServer): void {
       touchSession(session_id);
       signal?.throwIfAborted();
 
-      // Refresh all repos before exploring
-      log("explore_session refreshing repos...");
-      await Promise.all(session.repos.map((url) => ensureCloned(url)));
+      const job = createJob(session_id);
 
-      signal?.throwIfAborted();
+      // Fire and forget — runs agents in background, does not block the MCP response
+      void (async () => {
+        try {
+          log("explore_session refreshing repos for job", job.id);
+          const repoPaths = await Promise.all(session.repos.map((url) => ensureCloned(url)));
 
-      const names = repoNamesForUrls(session.repos);
-      const repoList = names.join(", ");
-      const agentQuestion = `You are exploring a workspace that contains the following repositories: ${repoList}.\n\n${question}`;
+          const names = repoNamesForUrls(session.repos);
 
-      const { Codex } = await import("@openai/codex-sdk");
-      const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
-      const thread = codex.startThread({
-        model: process.env.CODEX_MODEL ?? "gpt-5.1",
-        modelReasoningEffort: (process.env.CODEX_REASONING_EFFORT ?? "low") as
-          | "minimal"
-          | "low"
-          | "medium"
-          | "high"
-          | "xhigh",
-        workingDirectory: session.path,
-        skipGitRepoCheck: true,
-        sandboxMode: "read-only",
-        approvalPolicy: "never",
-        networkAccessEnabled: false,
-      });
+          const { Codex } = await import("@openai/codex-sdk");
 
-      log("explore_session starting codex agent in", session.path);
-      const turn = await thread.run(agentQuestion);
+          log("explore_session starting", names.length, "parallel agents for job", job.id);
 
-      log(`explore_session done, response length: ${turn.finalResponse?.length ?? 0}`);
+          const repoResults = await Promise.all(
+            session.repos.map(async (_, i) => {
+              const name = names[i];
+              const repoPath = repoPaths[i];
+
+              const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
+              const thread = codex.startThread({
+                model: process.env.CODEX_MODEL ?? "gpt-5.1",
+                modelReasoningEffort: (process.env.CODEX_REASONING_EFFORT ?? "low") as
+                  | "minimal"
+                  | "low"
+                  | "medium"
+                  | "high"
+                  | "xhigh",
+                workingDirectory: repoPath,
+                skipGitRepoCheck: true,
+                sandboxMode: "read-only",
+                approvalPolicy: "never",
+                networkAccessEnabled: false,
+              });
+
+              const turn = await thread.run(`Repository: ${name}\n\n${question}`);
+
+              log(`explore_session agent done for ${name}, length: ${turn.finalResponse?.length ?? 0}`);
+
+              return `## ${name}\n\n${turn.finalResponse?.trim() ?? "No relevant code found."}`;
+            })
+          );
+
+          resolveJob(job.id, repoResults.join("\n\n---\n\n"));
+          log("explore_session job", job.id, "done");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+
+          rejectJob(job.id, msg);
+          log("explore_session job", job.id, "error:", msg);
+        }
+      })();
 
       return {
         content: [
           {
             type: "text",
-            text:
-              turn.finalResponse?.trim() || "No relevant code found. Try a more specific question.",
+            text: `Exploration started.\nJob ID: ${job.id}\nRepos: ${repoNamesForUrls(session.repos).join(", ")}\n\nCall get_exploration_result("${job.id}") to check progress.`,
           },
         ],
+      };
+    }
+  );
+
+  // ── get_exploration_result ──────────────────────────────────────────────────
+  server.registerTool(
+    "get_exploration_result",
+    {
+      description:
+        "Poll for the result of an explore_session job.\n\nStatus values:\n- 'pending': agents still running — call again in a few seconds\n- 'done': full Technical Context ready — use as `context` in enrich_ticket\n- 'error': exploration failed",
+      inputSchema: {
+        job_id: z.string().describe("Job ID returned by explore_session"),
+      },
+    },
+    async ({ job_id }) => {
+      log("get_exploration_result", job_id);
+
+      const job = getJob(job_id);
+
+      if (!job) {
+        return {
+          content: [{ type: "text", text: `Job "${job_id}" not found.` }],
+          isError: true,
+        };
+      }
+
+      if (job.status === "pending") {
+        const elapsed = Math.round((Date.now() - new Date(job.startedAt).getTime()) / 1000);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Status: pending (${elapsed}s elapsed). Call again in a few seconds.`,
+            },
+          ],
+        };
+      }
+
+      if (job.status === "error") {
+        return {
+          content: [{ type: "text", text: `Status: error\n\n${job.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: job.result ?? "" }],
       };
     }
   );
